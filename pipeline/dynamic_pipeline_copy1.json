@@ -10,7 +10,7 @@
 				"typeProperties": {
 					"activities": [
 						{
-							"name": "last_cdc_copy1",
+							"name": "last_cdc",
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
@@ -38,7 +38,10 @@
 									"type": "DatasetReference",
 									"parameters": {
 										"container": "bronze",
-										"folder": "dimuser_cdc",
+										"folder": {
+											"value": "@{item().table}_cdc",
+											"type": "Expression"
+										},
 										"file": "cdc.json"
 									}
 								},
@@ -65,14 +68,19 @@
 						{
 							"name": "If Condition1_copy1",
 							"type": "IfCondition",
-							"state": "Inactive",
-							"onInactiveMarkAs": "Succeeded",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "SqlToLake_copy1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"userProperties": [],
 							"typeProperties": {
 								"ifFalseActivities": [
 									{
-										"name": "Delete1_copy1",
+										"name": "Delete_empty_table",
 										"type": "Delete",
 										"dependsOn": [],
 										"policy": {
@@ -90,7 +98,7 @@
 								],
 								"ifTrueActivities": [
 									{
-										"name": "max_cdc_copy1",
+										"name": "max_cdc",
 										"type": "Script",
 										"dependsOn": [],
 										"policy": {
@@ -110,7 +118,7 @@
 												{
 													"type": "Query",
 													"text": {
-														"value": "SELECT MAX(@{pipeline().parameters.cdc}) as cdc from @{pipeline().parameters.schema}.@{pipeline().parameters.table}",
+														"value": "SELECT MAX(@{item().cdc}) as cdc from @{item().schema}.@{item().table}",
 														"type": "Expression"
 													}
 												}
@@ -119,11 +127,11 @@
 										}
 									},
 									{
-										"name": "updated_last_cdc_copy1",
+										"name": "updated_last_cdc",
 										"type": "Copy",
 										"dependsOn": [
 											{
-												"activity": "max_cdc_copy1",
+												"activity": "max_cdc",
 												"dependencyConditions": [
 													"Succeeded"
 												]
@@ -149,8 +157,39 @@
 													"type": "JsonReadSettings"
 												}
 											},
+											"sink": {
+												"type": "JsonSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings"
+												},
+												"formatSettings": {
+													"type": "JsonWriteSettings"
+												}
+											},
 											"enableStaging": false
-										}
+										},
+										"inputs": [
+											{
+												"referenceName": "Json1",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"folder": "dimuser_cdc",
+													"file": "empty.json"
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "Json1",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"folder": "dimuser_cdc",
+													"file": "cdc.json"
+												}
+											}
+										]
 									}
 								]
 							}
@@ -160,7 +199,7 @@
 							"type": "Copy",
 							"dependsOn": [
 								{
-									"activity": "last_cdc_copy1",
+									"activity": "last_cdc",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -184,7 +223,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT * FROM @{pipeline().parameters.schema}.@{pipeline().parameters.table} WHERE @{pipeline().parameters.cdc} >'@{activity('last_cdc').output.value[0].cdc}'",
+										"value": "SELECT * FROM @{item().schema}.@{item().table} WHERE @{item().cdc} >'@{if(empty(item().from_date),activity('last_cdc').output.value[0].cdc,item().from_date)}'\n",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -222,11 +261,11 @@
 									"parameters": {
 										"container": "bronze",
 										"folder": {
-											"value": "@pipeline().parameters.table",
+											"value": "@{item().table}",
 											"type": "Expression"
 										},
 										"file": {
-											"value": "@concat(pipeline().parameters.table,'_',variables('current'))",
+											"value": "@concat(item().table,'_',variables('current'))",
 											"type": "Expression"
 										}
 									}
