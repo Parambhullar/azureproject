@@ -78,6 +78,10 @@
 							],
 							"userProperties": [],
 							"typeProperties": {
+								"expression": {
+									"value": "@greater(activity('SqlToLake_copy1').output.dataRead,0)",
+									"type": "Expression"
+								},
 								"ifFalseActivities": [
 									{
 										"name": "Delete_empty_table",
@@ -92,7 +96,27 @@
 										},
 										"userProperties": [],
 										"typeProperties": {
-											"enableLogging": false
+											"dataset": {
+												"referenceName": "Parquet1",
+												"type": "DatasetReference",
+												"parameters": {
+													"container": "bronze",
+													"folder": {
+														"value": "@item().table",
+														"type": "Expression"
+													},
+													"file": {
+														"value": "@concat(item().table,'_',variables('current'))",
+														"type": "Expression"
+													}
+												}
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											}
 										}
 									}
 								],
